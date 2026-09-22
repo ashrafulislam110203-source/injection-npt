@@ -11,10 +11,12 @@ from contextlib import closing
 import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.environ.get("KPI_DB_PATH", os.path.join(BASE_DIR, "data", "kpi.db"))
+DEMO = os.environ.get("KPI_DEMO") == "1"      # practice mode: separate database, never mixed with real data
+DB_PATH = os.environ.get("KPI_DB_PATH", os.path.join(BASE_DIR, "data", "demo.db" if DEMO else "kpi.db"))
 
 # Editable in the Settings page. Empty string = not set.
 DEFAULT_SETTINGS = {
+    "data_start_date": "2026-09-01",      # first day of the real database; earlier report dates are refused
     "scheduled_hours": "24",              # 2 shifts x 12 hours
     "shift_a_start": "8",                 # shift A = 08:00-20:00, shift B = 20:00-08:00 (empty = shift split off)
     "machine_count": "",                  # number of machines in the department (for NPT % of scheduled time)

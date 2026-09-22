@@ -91,3 +91,40 @@ def save_report(rep, upload_id, mode="new"):
                         (upload_id, rep.report_date.isoformat() if rep.report_date else None, None, "Row rejected", f"{loc}: {why}"))
         conn.commit()
     return written
+
+
+def backup_db(tag="backup"):
+    """Copy of the database file in a 'backups' folder next to it. Existing backups are never overwritten."""
+    import os
+    import sqlite3
+    folder = os.path.join(os.path.dirname(db.DB_PATH), "backups")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, f"kpi_{tag}_{dt.datetime.now():%Y%m%d_%H%M%S}.db")
+    with closing(db.connect()) as src, closing(sqlite3.connect(path)) as dst:
+        src.backup(dst)
+    return path
+
+
+def delete_day(kind, day):
+    """Remove one report type for one date (NPT: events that START on that date). Upload history is kept."""
+    db.init_db()
+    with closing(db.connect()) as conn:
+        if kind == "NPT":
+            cur = conn.execute("DELETE FROM npt_events WHERE substr(start_time,1,10)=?", (day.isoformat(),))
+        else:
+            cur = conn.execute("DELETE FROM rejection WHERE report_date=?", (day.isoformat(),))
+        n = cur.rowcount
+        conn.commit()
+    add_history(kind, "(deleted by user)", day.isoformat(), n, 0, 0, "Deleted", "-", 0, f"{n} record(s) removed")
+    return n
+
+
+def reset_all():
+    """Delete ALL NPT / Rejection data and history of warnings. A backup is made first. Returns backup path."""
+    path = backup_db("before_reset")
+    with closing(db.connect()) as conn:
+        for t in ("npt_events", "rejection", "data_warnings", "machines"):
+            conn.execute(f"DELETE FROM {t}")
+        conn.commit()
+    add_history("-", "(database reset by user)", None, 0, 0, 0, "Reset", "-", 0, "backup: " + path)
+    return path
