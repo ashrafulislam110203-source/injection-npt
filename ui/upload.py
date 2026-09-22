@@ -40,7 +40,11 @@ def _save_all(pending, choices):
 def render():
     st.title("Upload Reports")
     s = db.get_settings()
-    day = st.date_input("Report Date", dt.date.today() - dt.timedelta(days=1), format="DD/MM/YYYY")
+    start = dt.date.fromisoformat(s["data_start_date"])
+    if db.DEMO:
+        st.warning("PRACTICE MODE: this is a separate demo database. Do not use it for real data.")
+    day = st.date_input("Report Date", max(start, dt.date.today() - dt.timedelta(days=1)), min_value=start, format="DD/MM/YYYY",
+                        help=f"The database starts on {start:%d-%b-%Y}. Earlier dates are not accepted (change this in Settings).")
     files = {}
     cols = st.columns(2)
     for (kind, label), c in zip(TYPES, cols):
@@ -50,6 +54,9 @@ def render():
         st.session_state.pop("last_results", None)
         if not any(files.values()):
             st.error("Please upload at least one file.")
+            return
+        if day > dt.date.today():
+            st.error("The report date is in the future.")
             return
         reports, errors = {}, {}
         with st.spinner("Reading and checking the files..."):

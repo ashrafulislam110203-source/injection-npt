@@ -9,6 +9,78 @@ from utils.excel_export import build_workbook, notes_for
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+CSS = """
+<style>
+/* tighter, calmer spacing */
+.block-container {padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1300px;}
+h1 {font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.2rem !important;}
+h2, h3 {font-weight: 600;}
+
+/* metric cards */
+div[data-testid="stMetric"] {
+    background: #FFFFFF;
+    border: 1px solid #E6E9EF;
+    border-radius: 10px;
+    padding: 14px 16px 10px 16px;
+    box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+}
+div[data-testid="stMetricLabel"] {font-size: 0.80rem; color: #5B6675; font-weight: 500;}
+div[data-testid="stMetricValue"] {font-size: 1.45rem; color: #1F3864;}
+
+/* buttons */
+.stButton > button, .stDownloadButton > button {
+    border-radius: 8px; font-weight: 600; border: 1px solid #1F3864;
+}
+.stButton > button[kind="primary"], .stDownloadButton > button[kind="primary"] {
+    background-color: #1F3864; border-color: #1F3864;
+}
+.stButton > button[kind="primary"]:hover, .stDownloadButton > button[kind="primary"]:hover {
+    background-color: #16294A; border-color: #16294A;
+}
+
+/* tables */
+div[data-testid="stDataFrame"] {border: 1px solid #E6E9EF; border-radius: 8px;}
+
+/* sidebar */
+section[data-testid="stSidebar"] {background-color: #F7F8FA; border-right: 1px solid #E6E9EF;}
+section[data-testid="stSidebar"] .stRadio label {padding: 3px 0;}
+
+/* expander / warning boxes a touch tighter */
+div[data-testid="stExpander"] {border-radius: 8px; border: 1px solid #E6E9EF;}
+
+/* profile card in sidebar */
+.profile-card {display: flex; align-items: center; gap: 10px; padding: 10px 4px 14px 4px;}
+.profile-card img {border-radius: 50%; object-fit: cover; width: 46px; height: 46px; border: 2px solid #1F3864;}
+.profile-name {font-weight: 600; font-size: 0.92rem; color: #1A1A1A; line-height: 1.15;}
+.profile-role {font-size: 0.76rem; color: #6B7280; line-height: 1.2;}
+</style>
+"""
+
+
+def inject_css():
+    st.markdown(CSS, unsafe_allow_html=True)
+
+
+def sidebar_profile(name, role, photo_path=None):
+    """Shows a small round photo + name/role at the top of the sidebar.
+    Falls back to an initial-letter badge if no photo file exists yet."""
+    import base64
+    import os
+    img_html = ""
+    if photo_path and os.path.exists(photo_path):
+        b64 = base64.b64encode(open(photo_path, "rb").read()).decode()
+        ext = "png" if photo_path.lower().endswith("png") else "jpeg"
+        img_html = f'<img src="data:image/{ext};base64,{b64}">'
+    else:
+        initial = (name or "?").strip()[0].upper()
+        img_html = (f'<div style="width:46px;height:46px;border-radius:50%;background:#1F3864;'
+                    f'color:#fff;display:flex;align-items:center;justify-content:center;'
+                    f'font-weight:700;font-size:1.1rem;border:2px solid #1F3864;">{initial}</div>')
+    st.sidebar.markdown(
+        f'<div class="profile-card">{img_html}<div><div class="profile-name">{name}</div>'
+        f'<div class="profile-role">{role}</div></div></div>',
+        unsafe_allow_html=True)
+
 
 def dataframe(df, **kw):
     """st.dataframe at full width; works on old and new Streamlit versions."""

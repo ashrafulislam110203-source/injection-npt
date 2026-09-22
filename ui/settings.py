@@ -1,12 +1,17 @@
+import datetime as dt
+
 import streamlit as st
 
-from database import db
+from database import db, repository as repo
 
 
 def render():
     st.title("Settings")
     s = db.get_settings()
     with st.form("settings"):
+        st.subheader("Database")
+        sd = st.date_input("Database start date", dt.date.fromisoformat(s["data_start_date"]), format="DD/MM/YYYY",
+                           help="First day of your real data. Uploads for earlier dates are refused.")
         st.subheader("Department")
         c = st.columns(3)
         mc = c[0].text_input("Number of machines", s["machine_count"], help="Used only for 'NPT % of scheduled time'. Leave empty to hide that KPI.")
@@ -28,11 +33,12 @@ def render():
             if bad or (sa.strip() and not 0 <= float(sa) <= 23):
                 st.error("Please enter numbers only" + (f" ({', '.join(bad)})" if bad else " (shift hour must be 0-23)") + ".")
             else:
-                for k, v in dict(machine_count=mc.strip(), scheduled_hours=sched, shift_a_start=sa.strip(), long_npt_hours=longnpt,
+                for k, v in dict(data_start_date=sd.isoformat(), machine_count=mc.strip(), scheduled_hours=sched, shift_a_start=sa.strip(), long_npt_hours=longnpt,
                                  npt_goal_h_per_day=ng.strip(), rejection_goal_pieces_per_day=rg.strip(),
                                  rejection_qty_to_pieces=qf, rejection_weight_to_kg=wf).items():
                     db.set_setting(k, v)
                 st.success("Saved.")
+    _manage()
     st.caption("Machines are created automatically from the reports (IMM-380-03 and IMM-380-3 are the same machine). "
                "NPT and rejection causes are read from the reports, so new causes appear automatically.")
 
@@ -43,3 +49,21 @@ def _num(v):
         return True
     except ValueError:
         return False
+
+
+def _manage():
+    with st.expander("Manage stored data (delete a day / reset)"):
+        st.warning("Deleting cannot be undone. Upload history is kept. Use Excel Export & Backup first if unsure.")
+        c = st.columns(3)
+        kind = c[0].selectbox("Report type", ["NPT", "Rejection"], key="del_kind")
+        day = c[1].date_input("Date to delete", format="DD/MM/YYYY", key="del_day")
+        sure = c[2].checkbox("I confirm the delete", key="del_ok")
+        if st.button("Delete this day's data", disabled=not sure):
+            n = repo.delete_day(kind, day)
+            st.success(f"{n} record(s) removed for {kind} on {day:%d-%b-%Y}.")
+        st.divider()
+        st.write("**Reset the database** - removes ALL NPT and Rejection data. A backup copy is made first and kept.")
+        word = st.text_input("Type RESET to unlock", key="reset_word")
+        if st.button("Reset database", disabled=word != "RESET"):
+            path = repo.reset_all()
+            st.success(f"Database emptied. Backup saved: {path}")
