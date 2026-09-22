@@ -1,0 +1,89 @@
+# Production KPI - Injection Moulding (Version 1: NPT + Rejection)
+
+Upload the NPT (downtime) and Rejection reports from Smart Manufacturing every day. The app checks the files,
+saves the records permanently, and shows NPT and Rejection analysis by day, month, year, machine, cause and product.
+Everything can be exported to Excel.
+
+Version 1 does NOT use the Injection Due report. There is no OEE, Availability, Performance, Quality or
+Rejection % (Rejection % needs a production quantity). The old production/OEE code is kept, switched off,
+in `v2_production/` so it can be added later.
+
+## Run on your computer
+    pip install -r requirements.txt
+    streamlit run app.py
+The database is one file: `data/kpi.db`. Change the place with the environment variable `KPI_DB_PATH`.
+Optional password: set the environment variable `KPI_APP_PASSWORD`.
+
+## Every day
+1. Download the NPT and Rejection reports from Smart Manufacturing.
+2. Open **Upload Reports**, choose the report date, upload the files, click **PROCESS REPORTS**.
+3. If data for that date already exists, choose Replace / Skip / Cancel.
+4. Use Dashboard, Daily / Monthly / Yearly / Machine / NPT / Rejection Analysis. Export to Excel from any page.
+
+## Pages
+Dashboard, Upload Reports, Daily, Monthly, Yearly, Machine, NPT and Rejection Analysis, Data History,
+Upload History, Data Quality, Excel Export & Backup, Settings.
+
+## What the files mean (checked on your real files)
+* NPT: one row per downtime event (machine, from, to, cause). Dates are dd/mm/yyyy.
+  Events can cross midnight, so each event is cut at midnight: only the time inside each calendar day is counted.
+  Example: the 18 Sep file shows 396.1 h in total, but only 274.4 h falls on 18 Sep.
+  An event that continues on the next day is counted again on that day by design, and is never stored twice.
+* Rejection: one row per rejection entry. Dates are m/d/yyyy. Quantity = thousand pieces (x1000 = pieces),
+  Weight = tons (x1000 = kg). There is no shift column, so rejection cannot be split by shift.
+* Machine IDs are normalised: IMM-380-03 and IMM-380-3 are the same machine.
+* Causes are never hard-coded. A new cause is accepted automatically. The trailing "*", extra spaces and
+  capital/small letters are cleaned. Original text is kept in the database (`cause_raw`).
+
+## Numbers
+    Total NPT (h)      = time inside the selected days (events cut at midnight)
+    Occurrences        = number of NPT events
+    Average / Maximum  = per event, inside the selected period
+    NPT % of scheduled = NPT hours / (machines x 24 h x days)   (only if "Number of machines" is set in Settings)
+    Rejected pieces    = Quantity x 1000            Rejected weight (kg) = Weight x 1000
+    Pareto             = causes sorted by hours (NPT) or pieces (Rejection), with % and cumulative %
+Shift-wise NPT: Shift A starts at 08:00 (A = 08:00-20:00, B = 20:00-08:00). Change it in Settings if needed.
+A night shift that passes midnight appears on two calendar dates.
+Not included: MTBF / MTTR (needs a decision on which causes are breakdowns).
+
+## Data checks
+Rows with a wrong machine ID, missing dates, or To Time before From Time are not saved and are listed (the rest of the
+file is still saved). Overlapping events on one machine, very long events, and rejection records with zero weight are
+shown in Data Quality. Nothing is corrected silently.
+
+## Test with your real files
+    python tests/test_pipeline.py <folder with the 2 files>
+    python tests/test_ui.py <folder>
+The tests use a temporary database.
+
+## Google Colab
+1. Upload `kpi_app.zip` to Colab, then in a cell:
+       !unzip -o kpi_app.zip -d /content
+       %cd /content/kpi_app
+       !pip -q install -r requirements.txt
+2. Keep the database on Google Drive so it is not lost:
+       from google.colab import drive; drive.mount('/content/drive')
+       %env KPI_DB_PATH=/content/drive/MyDrive/kpi_data/kpi.db
+3. Start the app and open a tunnel:
+       !streamlit run app.py --server.port 8501 --server.headless true > /content/log.txt 2>&1 &
+       !curl ipv4.icanhazip.com        # this IP is the tunnel password
+       !npx -y localtunnel --port 8501
+   Open the printed link and paste the IP as the password.
+(These Colab steps have not been run from here. Colab stops after some idle time, so use it for testing only.)
+
+## Online deployment (later)
+Use a small server or a host with a persistent disk (for example a VPS, Render or Fly.io with a volume).
+Set `KPI_DB_PATH` to a path on that disk and set `KPI_APP_PASSWORD`. Do not use a host with temporary storage:
+the database would be lost when the app restarts. All SQL is plain, so a move to PostgreSQL / Supabase later
+only needs changes in `database/`.
+
+## Structure (modular)
+    app.py                 page menu
+    database/              db.py (tables, settings), repository.py (save / replace / skip, upload history)
+    processing/            cleaner.py, npt_processor.py, rejection_processor.py  (one file per report type)
+    kpi/                   npt.py, rejection.py, common.py
+    ui/                    one file per page
+    utils/excel_export.py  all Excel workbooks
+    v2_production/         NOT ACTIVE: Injection Due reader, OEE engine, production table (Version 2)
+To add a report type later: add a processor in `processing/`, a KPI module in `kpi/`, a save branch in
+`database/repository.py`, and pages in `ui/`.
